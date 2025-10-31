@@ -14,15 +14,24 @@
     <section class="instructions" aria-label="Instructions">
         <h2>How to use</h2>
         <p>Click any word to highlight it. Double-click a verse to highlight the whole verse.</p>
-        <p>Choose a book and chapter from the menus below to load verses.</p>
+        <p>Triple click to copy the verse</p>
+        <p>Select either Old Testament or New Testament, a book and a chapter from the dropdowns, the verses for that chapter will be displayed.</p>
     </section>
     <div class="controls">
-            <!-- Text input with custom autocomplete dropdown for book selection -->
-            <div class="autocomplete" style="position:relative; display:inline-block;">
-                <input id="bookInput" placeholder="Type or select a Book" aria-label="Book" autocomplete="off">
-                <div id="bookDropdown" class="autocomplete-dropdown" role="listbox" aria-label="Book suggestions" hidden></div>
-            </div>
-            <span id="bookError" class="book-error" aria-live="polite"></span>
+        <!-- Testament selector and Book dropdown (replaces autocomplete) -->
+        <label for="testamentSelect" class="visually-hidden">Testament</label>
+        <select id="testamentSelect" aria-label="Testament">
+            <option value="OT">Old Testament</option>
+            <option value="NT">New Testament</option>
+        </select>
+
+        <label for="bookSelect" class="visually-hidden">Book</label>
+        <select id="bookSelect" aria-label="Book">
+            <option value="">Select a Book</option>
+        </select>
+
+        <span id="bookError" class="book-error" aria-live="polite"></span>
+
         <select id="chapterSelect">
             <option value="">Select a Chapter</option>
         </select>
@@ -32,293 +41,227 @@
 
     <script src="niv.js"></script>
     <script>
-        const getBooks = () => {
-            const books = new Set();
-            bible_data.forEach(verse => {
-                // Book name may be multi-word (e.g. "1 Chronicles"). The last token is the reference (e.g. "1:1").
-                const parts = verse.name.split(' ');
-                const reference = parts[parts.length - 1];
-                const bookName = parts.slice(0, parts.length - 1).join(' ');
-                books.add(bookName);
-            });
-            return Array.from(books);
-        };
-
-        const getChapters = (book) => {
-            const chapters = new Set();
-            bible_data.forEach(verse => {
-                const parts = verse.name.split(' ');
-                const reference = parts[parts.length - 1];
-                const bookName = parts.slice(0, parts.length - 1).join(' ');
-                if (bookName === book) {
-                    const chapter = reference.split(':')[0];
-                    chapters.add(parseInt(chapter));
-                }
-            });
-            return Array.from(chapters).sort((a, b) => a - b);
-        };
-
-        const getVerses = (book, chapter) => {
-            return bible_data.filter(verse => {
-                const parts = verse.name.split(' ');
-                const reference = parts[parts.length - 1];
-                const bookName = parts.slice(0, parts.length - 1).join(' ');
-                const verseChapter = reference.split(':')[0];
-                // chapter argument may be string; compare as strings
-                return bookName === book && String(verseChapter) === String(chapter);
-            });
-        };
-
-        const bookInput = document.getElementById('bookInput');
-        const bookDropdown = document.getElementById('bookDropdown');
-        const bookError = document.getElementById('bookError');
-        const chapterSelect = document.getElementById('chapterSelect');
-        const verseContainer = document.getElementById('verseContainer');
-
-        // Helper: escape HTML for safe insertion
-        function escapeHtml(s) {
-            return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        }
-
-        // Load and sort books
-        const books = getBooks().sort((a, b) => a.localeCompare(b));
-
-        // Populate dropdown rendering
-        let currentMatches = [];
-        let dropdownIndex = -1;
-
-        function renderDropdown(matches, query) {
-            bookDropdown.innerHTML = '';
-            if (!matches.length) {
-                bookDropdown.hidden = true;
-                return;
+        // Replace autocomplete with two selects: testament and book.
+        document.addEventListener('DOMContentLoaded', () => {
+            // Helper: escape HTML for safe insertion
+            function escapeHtml(s) {
+                return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             }
-            matches.forEach((b, i) => {
-                const item = document.createElement('div');
-                item.className = 'autocomplete-item';
-                item.setAttribute('role', 'option');
-                item.dataset.index = i;
-                // highlight matched substring
-                const idx = b.toLowerCase().indexOf(query.toLowerCase());
-                if (idx >= 0) {
-                    const before = escapeHtml(b.slice(0, idx));
-                    const match = escapeHtml(b.slice(idx, idx + query.length));
-                    const after = escapeHtml(b.slice(idx + query.length));
-                    item.innerHTML = `${before}<span class="match">${match}</span>${after}`;
-                } else {
-                    item.textContent = b;
-                }
-                item.addEventListener('mousedown', (ev) => {
-                    // mousedown so selection occurs before blur
-                    ev.preventDefault();
-                    selectBook(b);
+
+            const getAllBooks = () => {
+                const books = new Set();
+                bible_data.forEach(verse => {
+                    const parts = verse.name.split(' ');
+                    const reference = parts[parts.length - 1];
+                    const bookName = parts.slice(0, parts.length - 1).join(' ');
+                    books.add(bookName);
                 });
-                bookDropdown.appendChild(item);
-            });
-            currentMatches = matches;
-            dropdownIndex = -1;
-            bookDropdown.hidden = false;
-        }
+                return Array.from(books);
+            };
 
-        function updateSelection() {
-            const items = Array.from(bookDropdown.children);
-            items.forEach((it, i) => it.classList.toggle('selected', i === dropdownIndex));
-            if (dropdownIndex >= 0 && items[dropdownIndex]) {
-                items[dropdownIndex].scrollIntoView({ block: 'nearest' });
-            }
-        }
+            const getChapters = (book) => {
+                const chapters = new Set();
+                bible_data.forEach(verse => {
+                    const parts = verse.name.split(' ');
+                    const reference = parts[parts.length - 1];
+                    const bookName = parts.slice(0, parts.length - 1).join(' ');
+                    if (bookName === book) {
+                        const chapter = reference.split(':')[0];
+                        chapters.add(parseInt(chapter));
+                    }
+                });
+                return Array.from(chapters).sort((a, b) => a - b);
+            };
 
-        function selectBook(name) {
-            bookInput.value = name;
-            bookDropdown.hidden = true;
-            bookError.textContent = '';
-            populateChaptersFor(name);
-            chapterSelect.focus();
-        }
+            const getVerses = (book, chapter) => {
+                return bible_data.filter(verse => {
+                    const parts = verse.name.split(' ');
+                    const reference = parts[parts.length - 1];
+                    const bookName = parts.slice(0, parts.length - 1).join(' ');
+                    const verseChapter = reference.split(':')[0];
+                    return bookName === book && String(verseChapter) === String(chapter);
+                });
+            };
 
-        function populateChaptersFor(book) {
-            chapterSelect.innerHTML = '<option value="">Select a Chapter</option>';
-            if (!book) return;
-            const chapters = getChapters(book);
-            chapters.forEach(ch => {
-                const opt = document.createElement('option');
-                opt.value = ch;
-                opt.textContent = ch;
-                chapterSelect.appendChild(opt);
-            });
-        }
+            // Canonical book lists for filtering into testaments
+            const OT_BOOKS = [
+                'Genesis','Exodus','Leviticus','Numbers','Deuteronomy','Joshua','Judges','Ruth','1 Samuel','2 Samuel','1 Kings','2 Kings','1 Chronicles','2 Chronicles','Ezra','Nehemiah','Esther','Job','Psalm','Proverbs','Ecclesiastes','Song of Solomon','Isaiah','Jeremiah','Lamentations','Ezekiel','Daniel','Hosea','Joel','Amos','Obadiah','Jonah','Micah','Nahum','Habakkuk','Zephaniah','Haggai','Zechariah','Malachi'
+            ];
 
-        // Input handling: show matches and auto-populate chapters using first partial match
-        bookInput.addEventListener('input', (e) => {
-            const q = e.target.value.trim();
-            if (!q) {
-                bookDropdown.hidden = true;
-                bookError.textContent = '';
+            const NT_BOOKS = [
+                'Matthew','Mark','Luke','John','Acts','Romans','1 Corinthians','2 Corinthians','Galatians','Ephesians','Philippians','Colossians','1 Thessalonians','2 Thessalonians','1 Timothy','2 Timothy','Titus','Philemon','Hebrews','James','1 Peter','2 Peter','1 John','2 John','3 John','Jude','Revelation'
+            ];
+
+            const testamentSelect = document.getElementById('testamentSelect');
+            const bookSelect = document.getElementById('bookSelect');
+            const chapterSelect = document.getElementById('chapterSelect');
+            const verseContainer = document.getElementById('verseContainer');
+            const bookError = document.getElementById('bookError');
+
+            // Preserve order of first appearance in bible_data (no alphabetical sort)
+            const allBooks = getAllBooks();
+
+            function populateBookSelect(testament) {
+                bookSelect.innerHTML = '<option value="">Select a Book</option>';
+                const list = [];
+                // iterate allBooks in original appearance order and pick those that belong to the chosen testament
+                allBooks.forEach(b => {
+                    if (testament === 'OT' && OT_BOOKS.includes(b)) list.push(b);
+                    else if (testament === 'NT' && NT_BOOKS.includes(b)) list.push(b);
+                });
+                list.forEach(b => {
+                    const opt = document.createElement('option');
+                    opt.value = b;
+                    opt.textContent = b;
+                    bookSelect.appendChild(opt);
+                });
                 chapterSelect.innerHTML = '<option value="">Select a Chapter</option>';
                 verseContainer.innerHTML = '';
-                return;
             }
-            const matches = books.filter(b => b.toLowerCase().includes(q.toLowerCase()));
-            renderDropdown(matches.slice(0, 12), q);
-            // Auto-populate chapters for first partial match
-            if (matches.length) {
-                populateChaptersFor(matches[0]);
-            } else {
+
+            function populateChaptersFor(book) {
                 chapterSelect.innerHTML = '<option value="">Select a Chapter</option>';
+                if (!book) return;
+                const chapters = getChapters(book);
+                chapters.forEach(ch => {
+                    const opt = document.createElement('option');
+                    opt.value = ch;
+                    opt.textContent = ch;
+                    chapterSelect.appendChild(opt);
+                });
             }
-            verseContainer.innerHTML = '';
-        });
 
-        // Keyboard navigation for dropdown
-        bookInput.addEventListener('keydown', (e) => {
-            if (bookDropdown.hidden) return;
-            const items = Array.from(bookDropdown.children);
-            if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                dropdownIndex = Math.min(dropdownIndex + 1, items.length - 1);
-                updateSelection();
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                dropdownIndex = Math.max(dropdownIndex - 1, 0);
-                updateSelection();
-            } else if (e.key === 'Enter') {
-                e.preventDefault();
-                if (dropdownIndex >= 0) selectBook(currentMatches[dropdownIndex]);
-                else {
-                    // if no selection, accept exact match or show error
-                    const exact = books.find(b => b.toLowerCase() === bookInput.value.trim().toLowerCase());
-                    if (exact) selectBook(exact);
-                    else {
-                        bookError.textContent = 'Unknown book';
-                        showToast('Unknown book');
-                        bookDropdown.hidden = true;
-                    }
+            testamentSelect.addEventListener('change', (e) => {
+                populateBookSelect(e.target.value);
+            });
+
+            bookSelect.addEventListener('change', (e) => {
+                const book = e.target.value;
+                bookError.textContent = '';
+                verseContainer.innerHTML = '';
+                populateChaptersFor(book);
+                // automatically select the first chapter (if present) and display verses
+                const chapters = getChapters(book);
+                if (chapters && chapters.length) {
+                    // select the first available chapter
+                    chapterSelect.value = String(chapters[0]);
+                    displayVerses(book, chapters[0]);
                 }
-            } else if (e.key === 'Escape') {
-                bookDropdown.hidden = true;
-            }
-        });
-
-        // hide dropdown on blur (allow clicks to register)
-        bookInput.addEventListener('blur', () => setTimeout(() => bookDropdown.hidden = true, 150));
-
-        // validation on blur: show message if book unknown
-        bookInput.addEventListener('focusout', () => {
-            const val = bookInput.value.trim();
-            if (!val) { bookError.textContent = ''; return; }
-            const exact = books.find(b => b.toLowerCase() === val.toLowerCase());
-            bookError.textContent = exact ? '' : 'Unknown book';
-        });
-
-        chapterSelect.addEventListener('change', (e) => {
-            const bookVal = bookInput.value.trim();
-            const chapter = e.target.value;
-            const matched = books.find(b => b.toLowerCase() === bookVal.toLowerCase());
-            if (!matched) {
-                bookError.textContent = 'Please select a valid book before choosing a chapter';
-                showToast('Please select a valid book');
-                return;
-            }
-            bookError.textContent = '';
-            if (matched && chapter) displayVerses(matched, chapter);
-        });
-
-        const clearBtn = document.getElementById('clearHighlights');
-        if (clearBtn) {
-            clearBtn.addEventListener('click', () => {
-                document.querySelectorAll('.highlighted-word').forEach(el => el.classList.remove('highlighted-word'));
-                document.querySelectorAll('.highlighted-verse').forEach(el => el.classList.remove('highlighted-verse'));
             });
-        }
 
-        function showToast(message, duration = 1200) {
-            const toast = document.getElementById('toast');
-            if (!toast) return;
-            toast.textContent = message;
-            toast.classList.add('show');
-            if (toast._hideTimeout) clearTimeout(toast._hideTimeout);
-            toast._hideTimeout = setTimeout(() => toast.classList.remove('show'), duration);
-        }
+            chapterSelect.addEventListener('change', (e) => {
+                const book = bookSelect.value;
+                const chapter = e.target.value;
+                if (!book) {
+                    bookError.textContent = 'Please select a valid book before choosing a chapter';
+                    showToast('Please select a valid book');
+                    return;
+                }
+                bookError.textContent = '';
+                if (book && chapter) displayVerses(book, chapter);
+            });
 
-        function displayVerses(book, chapter) {
-            const verses = getVerses(book, chapter);
-            verseContainer.innerHTML = '';
+            // initialize to Old Testament by default
+            testamentSelect.value = 'OT';
+            populateBookSelect('OT');
 
-            verses.forEach(verse => {
-                const verseDiv = document.createElement('div');
-                verseDiv.className = 'verse';
+            const clearBtn = document.getElementById('clearHighlights');
+            if (clearBtn) {
+                clearBtn.addEventListener('click', () => {
+                    document.querySelectorAll('.highlighted-word').forEach(el => el.classList.remove('highlighted-word'));
+                    document.querySelectorAll('.highlighted-verse').forEach(el => el.classList.remove('highlighted-verse'));
+                });
+            }
 
-                const referenceSpan = document.createElement('span');
-                referenceSpan.className = 'verse-reference';
-                referenceSpan.textContent = verse.name;
-                verseDiv.appendChild(referenceSpan);
+            function showToast(message, duration = 1200) {
+                const toast = document.getElementById('toast');
+                if (!toast) return;
+                toast.textContent = message;
+                toast.classList.add('show');
+                if (toast._hideTimeout) clearTimeout(toast._hideTimeout);
+                toast._hideTimeout = setTimeout(() => toast.classList.remove('show'), duration);
+            }
 
-                const textContainer = document.createElement('span');
-                textContainer.className = 'verse-text';
+            function displayVerses(book, chapter) {
+                const verses = getVerses(book, chapter);
+                verseContainer.innerHTML = '';
 
-                const words = verse.verse.split(/(\s+)/);
-                words.forEach(word => {
-                    if (word.trim()) {
-                        const wordSpan = document.createElement('span');
-                        wordSpan.textContent = word;
-                        wordSpan.className = 'word';
-                        wordSpan.addEventListener('click', (e) => {
-                            e.stopPropagation();
-                            if (e.detail === 3) {
-                                const textToCopy = `${verse.name} ${verse.verse}`;
-                                if (navigator.clipboard && navigator.clipboard.writeText) {
-                                    navigator.clipboard.writeText(textToCopy)
-                                        .then(() => showToast('Copied to clipboard'))
-                                        .catch(err => { console.error('Copy failed', err); showToast('Copy failed'); });
-                                } else {
-                                    const ta = document.createElement('textarea');
-                                    ta.value = textToCopy;
-                                    document.body.appendChild(ta);
-                                    ta.select();
-                                    let copied = false;
-                                    try { copied = document.execCommand('copy'); } catch (err) { console.error('Fallback copy failed', err); }
-                                    document.body.removeChild(ta);
-                                    showToast(copied ? 'Copied to clipboard' : 'Copy failed');
+                verses.forEach(verse => {
+                    const verseDiv = document.createElement('div');
+                    verseDiv.className = 'verse';
+
+                    const referenceSpan = document.createElement('span');
+                    referenceSpan.className = 'verse-reference';
+                    referenceSpan.textContent = verse.name;
+                    verseDiv.appendChild(referenceSpan);
+
+                    const textContainer = document.createElement('span');
+                    textContainer.className = 'verse-text';
+
+                    const words = verse.verse.split(/(\s+)/);
+                    words.forEach(word => {
+                        if (word.trim()) {
+                            const wordSpan = document.createElement('span');
+                            wordSpan.textContent = word;
+                            wordSpan.className = 'word';
+                            wordSpan.addEventListener('click', (e) => {
+                                e.stopPropagation();
+                                if (e.detail === 3) {
+                                    const textToCopy = `${verse.name} ${verse.verse}`;
+                                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                                        navigator.clipboard.writeText(textToCopy)
+                                            .then(() => showToast('Copied to clipboard'))
+                                            .catch(err => { console.error('Copy failed', err); showToast('Copy failed'); });
+                                    } else {
+                                        const ta = document.createElement('textarea');
+                                        ta.value = textToCopy;
+                                        document.body.appendChild(ta);
+                                        ta.select();
+                                        let copied = false;
+                                        try { copied = document.execCommand('copy'); } catch (err) { console.error('Fallback copy failed', err); }
+                                        document.body.removeChild(ta);
+                                        showToast(copied ? 'Copied to clipboard' : 'Copy failed');
+                                    }
+                                    return;
                                 }
-                                return;
-                            }
-                            wordSpan.classList.toggle('highlighted-word');
-                        });
-                        textContainer.appendChild(wordSpan);
-                    } else {
-                        textContainer.appendChild(document.createTextNode(word));
-                    }
-                });
-
-                verseDiv.appendChild(textContainer);
-
-                verseDiv.addEventListener('dblclick', () => {
-                    verseDiv.classList.toggle('highlighted-verse');
-                });
-
-                verseDiv.addEventListener('click', (e) => {
-                    if (e.detail === 3) {
-                        const textToCopy = `${verse.name} ${verse.verse}`;
-                        if (navigator.clipboard && navigator.clipboard.writeText) {
-                            navigator.clipboard.writeText(textToCopy)
-                                .then(() => showToast('Copied to clipboard'))
-                                .catch(err => { console.error('Copy failed', err); showToast('Copy failed'); });
+                                wordSpan.classList.toggle('highlighted-word');
+                            });
+                            textContainer.appendChild(wordSpan);
                         } else {
-                            const ta = document.createElement('textarea');
-                            ta.value = textToCopy;
-                            document.body.appendChild(ta);
-                            ta.select();
-                            let copied = false;
-                            try { copied = document.execCommand('copy'); copied = !!copied; } catch (err) { console.error('Fallback copy failed', err); }
-                            document.body.removeChild(ta);
-                            showToast(copied ? 'Copied to clipboard' : 'Copy failed');
+                            textContainer.appendChild(document.createTextNode(word));
                         }
-                    }
-                });
+                    });
 
-                verseContainer.appendChild(verseDiv);
-            });
-        }
+                    verseDiv.appendChild(textContainer);
+
+                    verseDiv.addEventListener('dblclick', () => {
+                        verseDiv.classList.toggle('highlighted-verse');
+                    });
+
+                    verseDiv.addEventListener('click', (e) => {
+                        if (e.detail === 3) {
+                            const textToCopy = `${verse.name} ${verse.verse}`;
+                            if (navigator.clipboard && navigator.clipboard.writeText) {
+                                navigator.clipboard.writeText(textToCopy)
+                                    .then(() => showToast('Copied to clipboard'))
+                                    .catch(err => { console.error('Copy failed', err); showToast('Copy failed'); });
+                            } else {
+                                const ta = document.createElement('textarea');
+                                ta.value = textToCopy;
+                                document.body.appendChild(ta);
+                                ta.select();
+                                let copied = false;
+                                try { copied = document.execCommand('copy'); copied = !!copied; } catch (err) { console.error('Fallback copy failed', err); }
+                                document.body.removeChild(ta);
+                                showToast(copied ? 'Copied to clipboard' : 'Copy failed');
+                            }
+                        }
+                    });
+
+                    verseContainer.appendChild(verseDiv);
+                });
+            }
+        });
     </script>
     <div id="toast" class="toast" aria-live="polite" aria-atomic="true"></div>
 </body>

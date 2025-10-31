@@ -1,6 +1,6 @@
 # Bible App
 
-Enter a book from the Bible and select a chapter from it, the verses for that chapter will be displayed.
+Select either Old Testament or New Testament, a book and a chapter from the dropdowns, the verses for that chapter will be displayed.
 
 Supports highlighting at both the word and verse levels.
 
