@@ -6,321 +6,68 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="style.css">
     <title>Bible Reader</title>
-        
 </head>
 
 <body>
-    <h1>Bible App (NIV)</h1>
-    <section class="instructions" aria-label="Instructions">
-        <h2>How to use</h2>
-        <p>Click any word to highlight it. Double-click a verse to highlight the whole verse.</p>
-        <p>Triple click to copy the verse</p>
-        <p>Select either Old Testament or New Testament, a book and a chapter from the dropdowns, the verses for that chapter will be displayed.</p>
-    </section>
-    <div class="controls">
-        <!-- Testament selector and Book dropdown (replaces autocomplete) -->
-        <div class="testament-buttons" role="tablist" aria-label="Testament">
-            <div class="dropdown testament" id="testamentOT">
-                <button id="btnOT" class="dropbtn" type="button" aria-pressed="false">Old Testament</button>
-                <div id="bookListOT" class="dropdown-content" role="listbox"></div>
-            </div>
-            <div class="dropdown testament" id="testamentNT">
-                <button id="btnNT" class="dropbtn" type="button" aria-pressed="false">New Testament</button>
-                <div id="bookListNT" class="dropdown-content" role="listbox"></div>
+    <header>
+        <h1>Bible App (NIV)</h1>
+        <h2 id="currentReference">Select a book and chapter below.</h2>
+    </header>
+
+    <div id="verseContainer">
+        <p class="initial-message">Use the menu at the bottom to select a book and chapter.</p>
+    </div>
+
+    <!-- Fixed Bottom Menu: Now includes Verse Selector -->
+    <nav class="fixed-bottom-menu">
+        <div class="menu-content">
+            <!-- Abbreviated button text for better mobile fit -->
+            <button id="btnOT" class="menu-button" type="button" aria-pressed="false">OT</button>
+            <button id="btnNT" class="menu-button" type="button" aria-pressed="false">NT</button>
+            <button id="chapterSelectorBtn" class="menu-button" type="button" disabled>Ch: -</button>
+            <!-- NEW VERSE SELECTOR BUTTON -->
+            <button id="verseSelectorBtn" class="menu-button" type="button" disabled>Vs: All</button>
+            <button id="clearHighlights" class="menu-button secondary" type="button">Clear</button>
+        </div>
+    </nav>
+
+    <!-- Book Selection Modal (Common for OT/NT) -->
+    <div id="bookModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="bookModalTitle">
+        <div class="modal-content">
+            <h3 id="bookModalTitle">Select a Book</h3>
+            <span class="close-btn">&times;</span>
+            <div id="bookList" class="button-group book-group" role="group" aria-label="Bible Books">
+                <!-- Book buttons will be inserted here by JavaScript -->
             </div>
         </div>
-
-        <span id="bookError" class="book-error" aria-live="polite"></span>
-        
-        <select id="chapterSelect" hidden>
-            <option value="">Select a Chapter</option>
-        </select>
-        <button id="clearHighlights" type="button">Clear Highlights</button>
     </div>
-    <div id="verseContainer"></div>
+
+    <!-- Chapter Selection Modal -->
+    <div id="chapterModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="chapterModalTitle">
+        <div class="modal-content">
+            <h3 id="chapterModalTitle">Select Chapter <span id="currentBookName"></span></h3>
+            <span class="close-btn">&times;</span>
+            <div id="chapterList" class="button-group chapter-group" role="group" aria-label="Chapters">
+                <!-- Chapter buttons will be inserted here by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- NEW VERSE SELECTION MODAL -->
+    <div id="verseModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="verseModalTitle">
+        <div class="modal-content">
+            <h3 id="verseModalTitle">Select Verse <span id="currentChapterReference"></span></h3>
+            <span class="close-btn">&times;</span>
+            <div id="verseList" class="button-group chapter-group" role="group" aria-label="Verses">
+                <!-- Verse buttons will be inserted here by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast" aria-live="polite" aria-atomic="true"></div>
 
     <script src="niv.js"></script>
-    <script>
-        // Replace autocomplete with two selects: testament and book.
-        document.addEventListener('DOMContentLoaded', () => {
-            // Helper: escape HTML for safe insertion
-            function escapeHtml(s) {
-                return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            }
-
-            const getAllBooks = () => {
-                const books = new Set();
-                bible_data.forEach(verse => {
-                    const parts = verse.name.split(' ');
-                    const reference = parts[parts.length - 1];
-                    const bookName = parts.slice(0, parts.length - 1).join(' ');
-                    books.add(bookName);
-                });
-                return Array.from(books);
-            };
-
-            const getChapters = (book) => {
-                const chapters = new Set();
-                bible_data.forEach(verse => {
-                    const parts = verse.name.split(' ');
-                    const reference = parts[parts.length - 1];
-                    const bookName = parts.slice(0, parts.length - 1).join(' ');
-                    if (bookName === book) {
-                        const chapter = reference.split(':')[0];
-                        chapters.add(parseInt(chapter));
-                    }
-                });
-                return Array.from(chapters).sort((a, b) => a - b);
-            };
-
-            const getVerses = (book, chapter) => {
-                return bible_data.filter(verse => {
-                    const parts = verse.name.split(' ');
-                    const reference = parts[parts.length - 1];
-                    const bookName = parts.slice(0, parts.length - 1).join(' ');
-                    const verseChapter = reference.split(':')[0];
-                    return bookName === book && String(verseChapter) === String(chapter);
-                });
-            };
-
-            // Canonical book lists for filtering into testaments
-            const OT_BOOKS = [
-                'Genesis','Exodus','Leviticus','Numbers','Deuteronomy','Joshua','Judges','Ruth','1 Samuel','2 Samuel','1 Kings','2 Kings','1 Chronicles','2 Chronicles','Ezra','Nehemiah','Esther','Job','Psalm','Proverbs','Ecclesiastes','Song of Solomon','Isaiah','Jeremiah','Lamentations','Ezekiel','Daniel','Hosea','Joel','Amos','Obadiah','Jonah','Micah','Nahum','Habakkuk','Zephaniah','Haggai','Zechariah','Malachi'
-            ];
-
-            const NT_BOOKS = [
-                'Matthew','Mark','Luke','John','Acts','Romans','1 Corinthians','2 Corinthians','Galatians','Ephesians','Philippians','Colossians','1 Thessalonians','2 Thessalonians','1 Timothy','2 Timothy','Titus','Philemon','Hebrews','James','1 Peter','2 Peter','1 John','2 John','3 John','Jude','Revelation'
-            ];
-
-            const btnOT = document.getElementById('btnOT');
-            const btnNT = document.getElementById('btnNT');
-            const bookListOT = document.getElementById('bookListOT');
-            const bookListNT = document.getElementById('bookListNT');
-            const testamentOTDiv = document.getElementById('testamentOT');
-            const testamentNTDiv = document.getElementById('testamentNT');
-            const chapterSelect = document.getElementById('chapterSelect');
-            const verseContainer = document.getElementById('verseContainer');
-            const bookError = document.getElementById('bookError');
-            let selectedBook = null;
-
-            // Preserve order of first appearance in bible_data (no alphabetical sort)
-            const allBooks = getAllBooks();
-
-            function populateBookSelect(testament) {
-                // choose which list to populate depending on testament
-                const target = testament === 'OT' ? bookListOT : bookListNT;
-                const other = testament === 'OT' ? bookListNT : bookListOT;
-
-                target.innerHTML = '';
-                const list = [];
-                // iterate allBooks in original appearance order and pick those that belong to the chosen testament
-                allBooks.forEach(b => {
-                    if (testament === 'OT' && OT_BOOKS.includes(b)) list.push(b);
-                    else if (testament === 'NT' && NT_BOOKS.includes(b)) list.push(b);
-                });
-                list.forEach(b => {
-                    const a = document.createElement('a');
-                    a.href = '#';
-                    a.className = 'book-link';
-                    a.dataset.book = b;
-                    a.textContent = b;
-                    target.appendChild(a);
-                });
-                // reveal the relevant book list and hide the other without clearing chapter/verses
-                testamentOTDiv.classList.remove('open');
-                testamentNTDiv.classList.remove('open');
-                if (testament === 'OT') testamentOTDiv.classList.add('open');
-                else testamentNTDiv.classList.add('open');
-                // update aria-pressed on buttons for accessibility
-                if (testament === 'OT') {
-                    btnOT.setAttribute('aria-pressed', 'true');
-                    btnNT.setAttribute('aria-pressed', 'false');
-                } else {
-                    btnOT.setAttribute('aria-pressed', 'false');
-                    btnNT.setAttribute('aria-pressed', 'true');
-                }
-            }
-
-            function populateChaptersFor(book) {
-                chapterSelect.innerHTML = '<option value="">Select a Chapter</option>';
-                if (!book) return;
-                const chapters = getChapters(book);
-                chapters.forEach(ch => {
-                    const opt = document.createElement('option');
-                    opt.value = ch;
-                    opt.textContent = ch;
-                    chapterSelect.appendChild(opt);
-                });
-            }
-
-            // wire up the testament buttons to show corresponding book lists (toggle on click)
-            btnOT.addEventListener('click', (e) => { e.stopPropagation(); populateBookSelect('OT'); });
-            btnNT.addEventListener('click', (e) => { e.stopPropagation(); populateBookSelect('NT'); });
-
-            // close dropdowns when clicking outside
-            document.addEventListener('click', (e) => {
-                if (!testamentOTDiv.contains(e.target)) testamentOTDiv.classList.remove('open');
-                if (!testamentNTDiv.contains(e.target)) testamentNTDiv.classList.remove('open');
-            });
-
-            function selectBook(book) {
-                selectedBook = book;
-                bookError.textContent = '';
-                // hide both lists after selection
-                testamentOTDiv.classList.remove('open');
-                testamentNTDiv.classList.remove('open');
-                verseContainer.innerHTML = '';
-                populateChaptersFor(book);
-                // automatically select the first chapter (if present) and display verses
-                const chapters = getChapters(book);
-                if (chapters && chapters.length) {
-                    chapterSelect.value = String(chapters[0]);
-                    chapterSelect.hidden = false;
-                    displayVerses(book, chapters[0]);
-                } else {
-                    chapterSelect.hidden = true;
-                }
-            }
-
-            // delegate clicks on book links inside each dropdown
-            bookListOT.addEventListener('click', (e) => {
-                const a = e.target.closest('a.book-link');
-                if (!a) return;
-                e.preventDefault();
-                selectBook(a.dataset.book);
-            });
-            bookListNT.addEventListener('click', (e) => {
-                const a = e.target.closest('a.book-link');
-                if (!a) return;
-                e.preventDefault();
-                selectBook(a.dataset.book);
-            });
-
-            // keyboard selection is naturally supported for anchors (Enter); add Space support as well
-            function onKeyActivate(e) {
-                if (e.key === ' ' ) {
-                    const a = e.target.closest('a.book-link');
-                    if (a) {
-                        e.preventDefault();
-                        selectBook(a.dataset.book);
-                    }
-                }
-            }
-            bookListOT.addEventListener('keydown', onKeyActivate);
-            bookListNT.addEventListener('keydown', onKeyActivate);
-
-            chapterSelect.addEventListener('change', (e) => {
-                const chapter = e.target.value;
-                if (!selectedBook) {
-                    bookError.textContent = 'Please select a valid book before choosing a chapter';
-                    showToast('Please select a valid book');
-                    return;
-                }
-                bookError.textContent = '';
-                if (selectedBook && chapter) displayVerses(selectedBook, chapter);
-            });
-
-            // no default testament selected — click a button to show books for that testament
-
-            const clearBtn = document.getElementById('clearHighlights');
-            if (clearBtn) {
-                clearBtn.addEventListener('click', () => {
-                    document.querySelectorAll('.highlighted-word').forEach(el => el.classList.remove('highlighted-word'));
-                    document.querySelectorAll('.highlighted-verse').forEach(el => el.classList.remove('highlighted-verse'));
-                });
-            }
-
-            function showToast(message, duration = 1200) {
-                const toast = document.getElementById('toast');
-                if (!toast) return;
-                toast.textContent = message;
-                toast.classList.add('show');
-                if (toast._hideTimeout) clearTimeout(toast._hideTimeout);
-                toast._hideTimeout = setTimeout(() => toast.classList.remove('show'), duration);
-            }
-
-            function displayVerses(book, chapter) {
-                const verses = getVerses(book, chapter);
-                verseContainer.innerHTML = '';
-
-                verses.forEach(verse => {
-                    const verseDiv = document.createElement('div');
-                    verseDiv.className = 'verse';
-
-                    const referenceSpan = document.createElement('span');
-                    referenceSpan.className = 'verse-reference';
-                    referenceSpan.textContent = verse.name;
-                    verseDiv.appendChild(referenceSpan);
-
-                    const textContainer = document.createElement('span');
-                    textContainer.className = 'verse-text';
-
-                    const words = verse.verse.split(/(\s+)/);
-                    words.forEach(word => {
-                        if (word.trim()) {
-                            const wordSpan = document.createElement('span');
-                            wordSpan.textContent = word;
-                            wordSpan.className = 'word';
-                            wordSpan.addEventListener('click', (e) => {
-                                e.stopPropagation();
-                                if (e.detail === 3) {
-                                    const textToCopy = `${verse.name} ${verse.verse}`;
-                                    if (navigator.clipboard && navigator.clipboard.writeText) {
-                                        navigator.clipboard.writeText(textToCopy)
-                                            .then(() => showToast('Copied to clipboard'))
-                                            .catch(err => { console.error('Copy failed', err); showToast('Copy failed'); });
-                                    } else {
-                                        const ta = document.createElement('textarea');
-                                        ta.value = textToCopy;
-                                        document.body.appendChild(ta);
-                                        ta.select();
-                                        let copied = false;
-                                        try { copied = document.execCommand('copy'); } catch (err) { console.error('Fallback copy failed', err); }
-                                        document.body.removeChild(ta);
-                                        showToast(copied ? 'Copied to clipboard' : 'Copy failed');
-                                    }
-                                    return;
-                                }
-                                wordSpan.classList.toggle('highlighted-word');
-                            });
-                            textContainer.appendChild(wordSpan);
-                        } else {
-                            textContainer.appendChild(document.createTextNode(word));
-                        }
-                    });
-
-                    verseDiv.appendChild(textContainer);
-
-                    verseDiv.addEventListener('dblclick', () => {
-                        verseDiv.classList.toggle('highlighted-verse');
-                    });
-
-                    verseDiv.addEventListener('click', (e) => {
-                        if (e.detail === 3) {
-                            const textToCopy = `${verse.name} ${verse.verse}`;
-                            if (navigator.clipboard && navigator.clipboard.writeText) {
-                                navigator.clipboard.writeText(textToCopy)
-                                    .then(() => showToast('Copied to clipboard'))
-                                    .catch(err => { console.error('Copy failed', err); showToast('Copy failed'); });
-                            } else {
-                                const ta = document.createElement('textarea');
-                                ta.value = textToCopy;
-                                document.body.appendChild(ta);
-                                ta.select();
-                                let copied = false;
-                                try { copied = document.execCommand('copy'); copied = !!copied; } catch (err) { console.error('Fallback copy failed', err); }
-                                document.body.removeChild(ta);
-                                showToast(copied ? 'Copied to clipboard' : 'Copy failed');
-                            }
-                        }
-                    });
-
-                    verseContainer.appendChild(verseDiv);
-                });
-            }
-        });
-    </script>
-    <div id="toast" class="toast" aria-live="polite" aria-atomic="true"></div>
+    <script src="script.js"></script>
 </body>
 
 </html>
