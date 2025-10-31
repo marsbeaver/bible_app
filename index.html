@@ -1,64 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
     <title>Bible Reader</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            line-height: 1.6;
-        }
-        .controls {
-            margin-bottom: 20px;
-        }
-        select {
-            padding: 5px;
-            margin-right: 10px;
-            font-size: 16px;
-        }
-        .verse {
-            padding: 10px;
-            margin: 5px 0;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        .verse:hover {
-            background-color: #f0f0f0;
-        }
-        .highlighted-verse {
-            background-color: #ffeb3b;
-        }
-        .highlighted-word {
-            background-color: #81d4fa;
-        }
-        #verseContainer {
-            margin-top: 20px;
-        }
-        .verse-reference {
-            font-weight: bold;
-            margin-right: 10px;
-        }
-        /* New styles for word spans */
-        .word {
-            padding: 0 1px;
-            border-radius: 2px;
-            cursor: pointer;
-        }
-        .word:hover {
-            background-color: #4e91c0;
-        }
-        .highlighted-word:hover{
-            background-color: #4fc3f7;
-        }
-        .highlighted-verse:hover{
-            background-color: #fdd835;
-        }
-    </style>
+    
 </head>
+
 <body>
     <h1>Bible App (NIV)</h1>
     <section class="instructions" aria-label="Instructions">
@@ -73,12 +23,12 @@
         <select id="chapterSelect">
             <option value="">Select a Chapter</option>
         </select>
+        <button id="clearHighlights" type="button">Clear Highlights</button>
     </div>
     <div id="verseContainer"></div>
 
     <script src="niv.js"></script>
     <script>
-        // Get unique books from bible_data
         const getBooks = () => {
             const books = new Set();
             bible_data.forEach(verse => {
@@ -88,7 +38,6 @@
             return Array.from(books);
         };
 
-        // Get chapters for a specific book
         const getChapters = (book) => {
             const chapters = new Set();
             bible_data.forEach(verse => {
@@ -101,7 +50,6 @@
             return Array.from(chapters).sort((a, b) => a - b);
         };
 
-        // Get verses for a specific book and chapter
         const getVerses = (book, chapter) => {
             return bible_data.filter(verse => {
                 const [bookName, reference] = verse.name.split(' ');
@@ -110,12 +58,10 @@
             });
         };
 
-        // Initialize selects
         const bookSelect = document.getElementById('bookSelect');
         const chapterSelect = document.getElementById('chapterSelect');
         const verseContainer = document.getElementById('verseContainer');
 
-        // Populate books
         getBooks().forEach(book => {
             const option = document.createElement('option');
             option.value = book;
@@ -123,7 +69,6 @@
             bookSelect.appendChild(option);
         });
 
-        // Book selection handler
         bookSelect.addEventListener('change', (e) => {
             const book = e.target.value;
             chapterSelect.innerHTML = '<option value="">Select a Chapter</option>';
@@ -138,7 +83,6 @@
             verseContainer.innerHTML = '';
         });
 
-        // Chapter selection handler
         chapterSelect.addEventListener('change', (e) => {
             const book = bookSelect.value;
             const chapter = e.target.value;
@@ -147,53 +91,104 @@
             }
         });
 
-        // Display verses
+        const clearBtn = document.getElementById('clearHighlights');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                document.querySelectorAll('.highlighted-word').forEach(el => el.classList.remove('highlighted-word'));
+                document.querySelectorAll('.highlighted-verse').forEach(el => el.classList.remove('highlighted-verse'));
+            });
+        }
+
+        function showToast(message, duration = 1200) {
+            const toast = document.getElementById('toast');
+            if (!toast) return;
+            toast.textContent = message;
+            toast.classList.add('show');
+            if (toast._hideTimeout) clearTimeout(toast._hideTimeout);
+            toast._hideTimeout = setTimeout(() => toast.classList.remove('show'), duration);
+        }
+
         function displayVerses(book, chapter) {
             const verses = getVerses(book, chapter);
             verseContainer.innerHTML = '';
-            
+
             verses.forEach(verse => {
                 const verseDiv = document.createElement('div');
                 verseDiv.className = 'verse';
-                
-                // Create verse reference
+
                 const referenceSpan = document.createElement('span');
                 referenceSpan.className = 'verse-reference';
                 referenceSpan.textContent = verse.name;
                 verseDiv.appendChild(referenceSpan);
 
-                // Create verse text container
                 const textContainer = document.createElement('span');
                 textContainer.className = 'verse-text';
-                
-                // Split text into words and create clickable spans
-                const words = verse.verse.split(/(\s+)/);  // Split keeping separators
+
+                const words = verse.verse.split(/(\s+)/);
                 words.forEach(word => {
-                    if (word.trim()) {  // If it's an actual word
+                    if (word.trim()) {
                         const wordSpan = document.createElement('span');
                         wordSpan.textContent = word;
                         wordSpan.className = 'word';
                         wordSpan.addEventListener('click', (e) => {
-                            e.stopPropagation();  // Prevent verse highlight
+                            e.stopPropagation();
+                            if (e.detail === 3) {
+                                const textToCopy = `${verse.name} ${verse.verse}`;
+                                if (navigator.clipboard && navigator.clipboard.writeText) {
+                                    navigator.clipboard.writeText(textToCopy)
+                                        .then(() => showToast('Copied to clipboard'))
+                                        .catch(err => { console.error('Copy failed', err); showToast('Copy failed'); });
+                                } else {
+                                    const ta = document.createElement('textarea');
+                                    ta.value = textToCopy;
+                                    document.body.appendChild(ta);
+                                    ta.select();
+                                    let copied = false;
+                                    try { copied = document.execCommand('copy'); } catch (err) { console.error('Fallback copy failed', err); }
+                                    document.body.removeChild(ta);
+                                    showToast(copied ? 'Copied to clipboard' : 'Copy failed');
+                                }
+                                return;
+                            }
                             wordSpan.classList.toggle('highlighted-word');
                         });
                         textContainer.appendChild(wordSpan);
                     } else {
-                        // Preserve whitespace
                         textContainer.appendChild(document.createTextNode(word));
                     }
                 });
 
                 verseDiv.appendChild(textContainer);
 
-                // Double click to highlight verse
                 verseDiv.addEventListener('dblclick', () => {
                     verseDiv.classList.toggle('highlighted-verse');
+                });
+
+                verseDiv.addEventListener('click', (e) => {
+                    if (e.detail === 3) {
+                        const textToCopy = `${verse.name} ${verse.verse}`;
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            navigator.clipboard.writeText(textToCopy)
+                                .then(() => showToast('Copied to clipboard'))
+                                .catch(err => { console.error('Copy failed', err); showToast('Copy failed'); });
+                        } else {
+                            const ta = document.createElement('textarea');
+                            ta.value = textToCopy;
+                            document.body.appendChild(ta);
+                            ta.select();
+                            let copied = false;
+                            try { copied = document.execCommand('copy'); copied = !!copied; } catch (err) { console.error('Fallback copy failed', err); }
+                            document.body.removeChild(ta);
+                            showToast(copied ? 'Copied to clipboard' : 'Copy failed');
+                        }
+                    }
                 });
 
                 verseContainer.appendChild(verseDiv);
             });
         }
     </script>
+    <div id="toast" class="toast" aria-live="polite" aria-atomic="true"></div>
 </body>
+
 </html>
