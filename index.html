@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="style.css">
     <title>Bible Reader</title>
-    
+        
 </head>
 
 <body>
@@ -19,20 +19,20 @@
     </section>
     <div class="controls">
         <!-- Testament selector and Book dropdown (replaces autocomplete) -->
-        <label for="testamentSelect" class="visually-hidden">Testament</label>
-        <select id="testamentSelect" aria-label="Testament">
-            <option value="OT">Old Testament</option>
-            <option value="NT">New Testament</option>
-        </select>
-
-        <label for="bookSelect" class="visually-hidden">Book</label>
-        <select id="bookSelect" aria-label="Book">
-            <option value="">Select a Book</option>
-        </select>
+        <div class="testament-buttons" role="tablist" aria-label="Testament">
+            <div class="dropdown testament" id="testamentOT">
+                <button id="btnOT" class="dropbtn" type="button" aria-pressed="false">Old Testament</button>
+                <div id="bookListOT" class="dropdown-content" role="listbox"></div>
+            </div>
+            <div class="dropdown testament" id="testamentNT">
+                <button id="btnNT" class="dropbtn" type="button" aria-pressed="false">New Testament</button>
+                <div id="bookListNT" class="dropdown-content" role="listbox"></div>
+            </div>
+        </div>
 
         <span id="bookError" class="book-error" aria-live="polite"></span>
-
-        <select id="chapterSelect">
+        
+        <select id="chapterSelect" hidden>
             <option value="">Select a Chapter</option>
         </select>
         <button id="clearHighlights" type="button">Clear Highlights</button>
@@ -92,17 +92,26 @@
                 'Matthew','Mark','Luke','John','Acts','Romans','1 Corinthians','2 Corinthians','Galatians','Ephesians','Philippians','Colossians','1 Thessalonians','2 Thessalonians','1 Timothy','2 Timothy','Titus','Philemon','Hebrews','James','1 Peter','2 Peter','1 John','2 John','3 John','Jude','Revelation'
             ];
 
-            const testamentSelect = document.getElementById('testamentSelect');
-            const bookSelect = document.getElementById('bookSelect');
+            const btnOT = document.getElementById('btnOT');
+            const btnNT = document.getElementById('btnNT');
+            const bookListOT = document.getElementById('bookListOT');
+            const bookListNT = document.getElementById('bookListNT');
+            const testamentOTDiv = document.getElementById('testamentOT');
+            const testamentNTDiv = document.getElementById('testamentNT');
             const chapterSelect = document.getElementById('chapterSelect');
             const verseContainer = document.getElementById('verseContainer');
             const bookError = document.getElementById('bookError');
+            let selectedBook = null;
 
             // Preserve order of first appearance in bible_data (no alphabetical sort)
             const allBooks = getAllBooks();
 
             function populateBookSelect(testament) {
-                bookSelect.innerHTML = '<option value="">Select a Book</option>';
+                // choose which list to populate depending on testament
+                const target = testament === 'OT' ? bookListOT : bookListNT;
+                const other = testament === 'OT' ? bookListNT : bookListOT;
+
+                target.innerHTML = '';
                 const list = [];
                 // iterate allBooks in original appearance order and pick those that belong to the chosen testament
                 allBooks.forEach(b => {
@@ -110,13 +119,26 @@
                     else if (testament === 'NT' && NT_BOOKS.includes(b)) list.push(b);
                 });
                 list.forEach(b => {
-                    const opt = document.createElement('option');
-                    opt.value = b;
-                    opt.textContent = b;
-                    bookSelect.appendChild(opt);
+                    const a = document.createElement('a');
+                    a.href = '#';
+                    a.className = 'book-link';
+                    a.dataset.book = b;
+                    a.textContent = b;
+                    target.appendChild(a);
                 });
-                chapterSelect.innerHTML = '<option value="">Select a Chapter</option>';
-                verseContainer.innerHTML = '';
+                // reveal the relevant book list and hide the other without clearing chapter/verses
+                testamentOTDiv.classList.remove('open');
+                testamentNTDiv.classList.remove('open');
+                if (testament === 'OT') testamentOTDiv.classList.add('open');
+                else testamentNTDiv.classList.add('open');
+                // update aria-pressed on buttons for accessibility
+                if (testament === 'OT') {
+                    btnOT.setAttribute('aria-pressed', 'true');
+                    btnNT.setAttribute('aria-pressed', 'false');
+                } else {
+                    btnOT.setAttribute('aria-pressed', 'false');
+                    btnNT.setAttribute('aria-pressed', 'true');
+                }
             }
 
             function populateChaptersFor(book) {
@@ -131,39 +153,74 @@
                 });
             }
 
-            testamentSelect.addEventListener('change', (e) => {
-                populateBookSelect(e.target.value);
+            // wire up the testament buttons to show corresponding book lists (toggle on click)
+            btnOT.addEventListener('click', (e) => { e.stopPropagation(); populateBookSelect('OT'); });
+            btnNT.addEventListener('click', (e) => { e.stopPropagation(); populateBookSelect('NT'); });
+
+            // close dropdowns when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!testamentOTDiv.contains(e.target)) testamentOTDiv.classList.remove('open');
+                if (!testamentNTDiv.contains(e.target)) testamentNTDiv.classList.remove('open');
             });
 
-            bookSelect.addEventListener('change', (e) => {
-                const book = e.target.value;
+            function selectBook(book) {
+                selectedBook = book;
                 bookError.textContent = '';
+                // hide both lists after selection
+                testamentOTDiv.classList.remove('open');
+                testamentNTDiv.classList.remove('open');
                 verseContainer.innerHTML = '';
                 populateChaptersFor(book);
                 // automatically select the first chapter (if present) and display verses
                 const chapters = getChapters(book);
                 if (chapters && chapters.length) {
-                    // select the first available chapter
                     chapterSelect.value = String(chapters[0]);
+                    chapterSelect.hidden = false;
                     displayVerses(book, chapters[0]);
+                } else {
+                    chapterSelect.hidden = true;
                 }
+            }
+
+            // delegate clicks on book links inside each dropdown
+            bookListOT.addEventListener('click', (e) => {
+                const a = e.target.closest('a.book-link');
+                if (!a) return;
+                e.preventDefault();
+                selectBook(a.dataset.book);
+            });
+            bookListNT.addEventListener('click', (e) => {
+                const a = e.target.closest('a.book-link');
+                if (!a) return;
+                e.preventDefault();
+                selectBook(a.dataset.book);
             });
 
+            // keyboard selection is naturally supported for anchors (Enter); add Space support as well
+            function onKeyActivate(e) {
+                if (e.key === ' ' ) {
+                    const a = e.target.closest('a.book-link');
+                    if (a) {
+                        e.preventDefault();
+                        selectBook(a.dataset.book);
+                    }
+                }
+            }
+            bookListOT.addEventListener('keydown', onKeyActivate);
+            bookListNT.addEventListener('keydown', onKeyActivate);
+
             chapterSelect.addEventListener('change', (e) => {
-                const book = bookSelect.value;
                 const chapter = e.target.value;
-                if (!book) {
+                if (!selectedBook) {
                     bookError.textContent = 'Please select a valid book before choosing a chapter';
                     showToast('Please select a valid book');
                     return;
                 }
                 bookError.textContent = '';
-                if (book && chapter) displayVerses(book, chapter);
+                if (selectedBook && chapter) displayVerses(selectedBook, chapter);
             });
 
-            // initialize to Old Testament by default
-            testamentSelect.value = 'OT';
-            populateBookSelect('OT');
+            // no default testament selected — click a button to show books for that testament
 
             const clearBtn = document.getElementById('clearHighlights');
             if (clearBtn) {
