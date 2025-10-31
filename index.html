@@ -16,9 +16,23 @@
 
     <div id="verseContainer">
         <p class="initial-message">Use the menu at the bottom to select a book and chapter.</p>
+        <!-- The canvas will overlay this container via CSS positioning -->
+        <canvas id="drawingCanvas"></canvas>
     </div>
 
-    <!-- Fixed Bottom Menu: Now includes Verse Selector -->
+    <!-- NEW: Drawing Tools Panel -->
+    <div id="drawingTools" class="drawing-controls hidden">
+        <label for="colorPicker" class="tool-label">Pen Color:</label>
+        <input type="color" id="colorPicker" value="#f43f5e" class="tool-input">
+        
+        <label for="penSize" class="tool-label">Size:</label>
+        <input type="range" id="penSize" min="1" max="15" value="5" class="tool-input size-slider">
+
+        <button id="clearDrawing" class="tool-button secondary">Clear Drawing</button>
+        <button id="toggleDrawingMode" class="tool-button primary">Done</button>
+    </div>
+
+    <!-- Fixed Bottom Menu: Now includes Drawing Mode Toggle -->
     <nav class="fixed-bottom-menu">
         <div class="menu-content">
             <!-- Abbreviated button text for better mobile fit -->
@@ -28,6 +42,9 @@
             <!-- NEW VERSE SELECTOR BUTTON -->
             <button id="verseSelectorBtn" class="menu-button" type="button" disabled>Vs: All</button>
             <button id="clearHighlights" class="menu-button secondary" type="button">Clear</button>
+            
+            <!-- NEW: Drawing Mode Button -->
+            <button id="startDrawingMode" class="menu-button tertiary" type="button">Draw</button>
         </div>
     </nav>
 

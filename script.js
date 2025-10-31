@@ -65,6 +65,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const chapterSelectorBtn = document.getElementById('chapterSelectorBtn');
     const verseSelectorBtn = document.getElementById('verseSelectorBtn');
     const clearHighlightsBtn = document.getElementById('clearHighlights');
+    // NEW Drawing elements
+    const startDrawingModeBtn = document.getElementById('startDrawingMode');
+    const drawingTools = document.getElementById('drawingTools');
+    const toggleDrawingModeBtn = document.getElementById('toggleDrawingMode');
+    const clearDrawingBtn = document.getElementById('clearDrawing');
+    const colorPicker = document.getElementById('colorPicker');
+    const penSizeInput = document.getElementById('penSize');
+    
     const verseContainer = document.getElementById('verseContainer');
     const currentReference = document.getElementById('currentReference');
 
@@ -88,9 +96,144 @@ document.addEventListener('DOMContentLoaded', () => {
     const LONG_PRESS_DURATION = 600; // milliseconds
     let longPressTriggered = false; // Flag to block click/tap events after a successful long press
 
+
+    // --- CANVAS DRAWING LOGIC ---
+    const canvas = document.getElementById('drawingCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    let isDrawing = false;
+    let penColor = colorPicker.value;
+    let penSize = parseInt(penSizeInput.value);
+    let drawingModeActive = false;
+
+    // Function to resize canvas to match verseContainer dimensions
+    function resizeCanvas() {
+        // Must use clientWidth/Height for the dimensions
+        const rect = verseContainer.getBoundingClientRect();
+        
+        // Update the canvas resolution
+        canvas.width = verseContainer.clientWidth;
+        canvas.height = verseContainer.clientHeight;
+        
+        // Since resizing clears the canvas, we need to handle redrawing here 
+        // if we were saving the drawing data. For simplicity, we won't save it 
+        // across chapter changes or resizing for this initial implementation.
+        // For a full persistence feature, drawing path data would be replayed here.
+        ctx.strokeStyle = penColor;
+        ctx.lineWidth = penSize;
+        ctx.lineCap = 'round';
+    }
+
+    function startDrawing(e) {
+        if (!drawingModeActive) return;
+        isDrawing = true;
+        
+        // Calculate the relative coordinates (accounting for container's scroll)
+        const clientX = e.clientX || e.touches[0].clientX;
+        const clientY = e.clientY || e.touches[0].clientY;
+        const rect = canvas.getBoundingClientRect();
+        
+        ctx.beginPath();
+        ctx.moveTo(
+            clientX - rect.left, 
+            clientY - rect.top + verseContainer.scrollTop // Account for vertical scroll
+        );
+        e.preventDefault(); // Prevent scrolling/default touch behavior while drawing
+    }
+
+    function draw(e) {
+        if (!isDrawing || !drawingModeActive) return;
+
+        // Calculate the relative coordinates
+        const clientX = e.clientX || e.touches[0].clientX;
+        const clientY = e.clientY || e.touches[0].clientY;
+        const rect = canvas.getBoundingClientRect();
+        
+        ctx.lineTo(
+            clientX - rect.left, 
+            clientY - rect.top + verseContainer.scrollTop // Account for vertical scroll
+        );
+        ctx.stroke();
+        e.preventDefault(); // Prevent scrolling/default touch behavior while drawing
+    }
+
+    function stopDrawing() {
+        if (!drawingModeActive) return;
+        isDrawing = false;
+        ctx.closePath();
+    }
+    
+    // Add drawing listeners
+    canvas.addEventListener('mousedown', startDrawing);
+    canvas.addEventListener('mouseup', stopDrawing);
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseleave', stopDrawing);
+    
+    // Add touch support
+    canvas.addEventListener('touchstart', startDrawing);
+    canvas.addEventListener('touchend', stopDrawing);
+    canvas.addEventListener('touchmove', draw);
+
+
+    // Update tool settings
+    colorPicker.addEventListener('input', (e) => {
+        penColor = e.target.value;
+        ctx.strokeStyle = penColor;
+    });
+
+    penSizeInput.addEventListener('input', (e) => {
+        penSize = parseInt(e.target.value);
+        ctx.lineWidth = penSize;
+    });
+    
+    clearDrawingBtn.addEventListener('click', () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        showToast('Drawing cleared');
+    });
+
+    // Toggle Drawing Mode Handler
+    function toggleDrawingUI(activate) {
+        drawingModeActive = activate;
+        document.body.classList.toggle('drawing-mode-active', activate);
+        drawingTools.classList.toggle('hidden', !activate);
+        
+        if (activate) {
+            // Adjust canvas size to fit new content if needed
+            resizeCanvas(); 
+            startDrawingModeBtn.textContent = 'Exit Draw';
+            showToast('Drawing Mode Active');
+        } else {
+            startDrawingModeBtn.textContent = 'Draw';
+            showToast('Drawing Mode Off');
+        }
+    }
+    
+    startDrawingModeBtn.addEventListener('click', () => {
+        // If drawing mode is OFF, turn it ON.
+        if (!drawingModeActive) {
+            toggleDrawingUI(true);
+        } else {
+            // If drawing mode is ON (from the main menu button), turn it OFF.
+            toggleDrawingUI(false);
+        }
+    });
+
+    toggleDrawingModeBtn.addEventListener('click', () => {
+        // This is the 'Done' button in the drawing tools panel
+        toggleDrawingUI(false);
+    });
+
+    // Ensure canvas resizes when the window resizes (handles orientation change on mobile)
+    window.addEventListener('resize', resizeCanvas);
+
+
     // --- Modal Control Functions ---
 
     function openModal(modal) {
+        // Deactivate drawing mode when opening any modal
+        if (drawingModeActive) {
+            toggleDrawingUI(false);
+        }
         modal.style.display = 'block';
     }
 
@@ -268,7 +411,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Verse Selection Handler
     verseList.addEventListener('click', (e) => {
-        const button = e.target.closest('.verse-button');
+        const button = e.closest('.verse-button');
         if (!button) return;
 
         const verseData = button.dataset.verse;
@@ -322,8 +465,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const startPress = (e) => {
             // Only start timer if it's the primary mouse button (0) or a touch
             if (e.button !== 0 && e.type === 'mousedown') return;
-
-            // CRITICAL FIX: DO NOT call e.preventDefault() here. This is what blocks native scrolling.
+            if (drawingModeActive) return; // Disable long press in drawing mode
 
             clearTimeout(pressTimer);
             longPressTriggered = false;
@@ -354,10 +496,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function displayVerses(book, chapter, verse = null) {
         let verses = getVerses(book, chapter);
+        
+        // CRITICAL FIX START: Preserve the canvas element before clearing innerHTML
+        const tempCanvas = document.getElementById('drawingCanvas');
+        if (tempCanvas) {
+             // 1. Remove the canvas from the container
+             tempCanvas.remove();
+             // 2. Clear the drawing when a new chapter is loaded (user requested)
+             if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height); 
+        }
+
+        // 3. Now clear the verse container safely
         verseContainer.innerHTML = '';
+        
+        // 4. Re-append the canvas first (it needs to be the first child for positioning)
+        if (tempCanvas) {
+             verseContainer.appendChild(tempCanvas);
+        }
+        // CRITICAL FIX END
 
         if (verses.length === 0) {
-            verseContainer.innerHTML = `<p class="initial-message">No verses found for ${book} chapter ${chapter}.</p>`;
+            const message = document.createElement('p');
+            message.className = 'initial-message';
+            message.textContent = `No verses found for ${book} chapter ${chapter}.`;
+            verseContainer.appendChild(message);
+            // Resize canvas even for initial message to zero out
+            resizeCanvas(); 
             return;
         }
 
@@ -371,7 +535,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (verses.length === 0 && verse !== null) {
-            verseContainer.innerHTML = `<p class="initial-message">Verse ${verse} not found in ${book} chapter ${chapter}.</p>`;
+            const message = document.createElement('p');
+            message.className = 'initial-message';
+            message.textContent = `Verse ${verse} not found in ${book} chapter ${chapter}.`;
+            verseContainer.appendChild(message);
+            resizeCanvas();
             return;
         }
 
@@ -398,8 +566,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     // 1. Word Highlight (Simple click)
                     wordSpan.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        // Block highlight if long press just occurred
-                        if (longPressTriggered) {
+                        // Block highlight if long press or drawing mode is active
+                        if (longPressTriggered || drawingModeActive) {
                             return;
                         }
                         wordSpan.classList.toggle('highlighted-word');
@@ -419,6 +587,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // 2. Double click for verse highlight
             verseDiv.addEventListener('dblclick', () => {
+                if (drawingModeActive) return; // Disable highlight in drawing mode
                 verseDiv.classList.toggle('highlighted-verse');
             });
 
@@ -427,16 +596,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 // IMPORTANT: Prevent the standard click event from triggering if long press fired
                 if (longPressTriggered) {
                     e.stopImmediatePropagation();
-                    // Do NOT call e.preventDefault() here unless necessary, but stopImmediatePropagation should be enough
                     longPressTriggered = false;
                     return;
                 }
             });
 
+            // Appending all the verse divs
             verseContainer.appendChild(verseDiv);
         });
+
+        // CRITICAL: Call resize after all content is added to match container size
+        // This must be deferred slightly to allow the DOM to fully render the content height.
+        setTimeout(resizeCanvas, 50);
     }
 
     // Initial State Setup
     updateReferenceDisplay();
+    // Initial canvas setup
+    if (ctx) resizeCanvas(); 
 });

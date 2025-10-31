@@ -8,5 +8,6 @@ Supports highlighting at both the word and verse levels.
 - Double-click within a verse to toggle a highlight for the entire verse.
 - Triple-click to copy the verse
 - Click on the 'Clear Hightlights' button to remove all highlights from the page
+- Draw mode to write on the screen, to underline or write notes
 
 Repeated clicks reverse the corresponding highlight action.

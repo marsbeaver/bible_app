@@ -16,6 +16,7 @@
     --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     --menu-height: 4.5rem; /* Height of the fixed bottom menu */
+    --drawing-tool-height: 3.5rem; /* Height of the drawing panel */
     --max-content-width: 800px; /* Setting a specific width for content alignment */
 }
 
@@ -76,14 +77,48 @@ h1 {
     color: var(--secondary-color);
 }
 
-/* --- VERSE DISPLAY --- */
+/* --- VERSE DISPLAY AND CANVAS OVERLAY (CRITICAL) --- */
 
 #verseContainer {
+    /* CRITICAL: Set position relative for canvas absolute positioning */
+    position: relative; 
     margin-top: 1rem;
     display: flex;
     flex-direction: column;
     gap: 1rem;
     padding-top: 1rem;
+    /* Allow text content interaction by default */
+    pointer-events: auto;
+}
+
+/* Canvas overlay styles */
+#drawingCanvas {
+    /* CRITICAL: Absolute positioning relative to #verseContainer */
+    position: absolute;
+    top: 0;
+    left: 0;
+    /* CRITICAL: Fill 100% of the container's width and height */
+    width: 100%;
+    height: 100%;
+    
+    z-index: 150; /* Above verses but below modals and drawing tools */
+    /* CRITICAL: Canvas must be transparent to see the verses underneath */
+    background: transparent;
+    /* By default, allow mouse events to pass through to the verses */
+    pointer-events: none; 
+}
+
+/* When drawing mode is active, the canvas must capture the events */
+.drawing-mode-active #drawingCanvas {
+    pointer-events: auto;
+    /* Optional: A subtle visual cue that drawing mode is active */
+    cursor: crosshair;
+}
+
+/* When drawing mode is active, the text content should NOT be interactive */
+.drawing-mode-active #verseContainer {
+    /* This ensures verse and word highlights are disabled while drawing */
+    pointer-events: none;
 }
 
 .initial-message {
@@ -139,6 +174,89 @@ h1 {
 .highlighted-verse:hover {
     background-color: #fef08a; /* Slightly darker highlight hover */
 }
+
+/* --- DRAWING TOOLS PANEL --- */
+#drawingTools {
+    position: fixed;
+    bottom: var(--menu-height); /* Positioned just above the fixed menu */
+    left: 0;
+    width: 100%;
+    max-width: var(--max-content-width);
+    /* Auto margin aligns it center with the main body content */
+    margin: 0 auto; 
+    background-color: #ffffff;
+    padding: 0.5rem 1rem;
+    border-top: 1px solid var(--border-color);
+    box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.05);
+    z-index: 180; /* Above the fixed menu shadow, below modals */
+    
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    height: var(--drawing-tool-height);
+    transition: transform var(--transition-speed) ease-in-out;
+}
+
+#drawingTools.hidden {
+    /* Hide by sliding it down below the menu */
+    transform: translateY(var(--drawing-tool-height));
+    opacity: 0;
+    pointer-events: none;
+}
+
+.tool-label {
+    font-size: 0.85rem;
+    color: var(--secondary-color);
+    font-weight: 500;
+    flex-shrink: 0;
+}
+
+.tool-input {
+    flex-shrink: 0;
+    /* Reset default input styles */
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+}
+
+#colorPicker {
+    width: 30px;
+    height: 30px;
+    padding: 2px;
+}
+
+.size-slider {
+    flex-grow: 1;
+    min-width: 50px;
+}
+
+.tool-button {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-radius: var(--border-radius);
+    transition: background-color var(--transition-speed) ease;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.tool-button.primary {
+    background-color: #ef4444; /* Red-500 for 'Done' */
+    color: white;
+    border: none;
+}
+.tool-button.primary:hover {
+    background-color: #dc2626; /* Red-600 */
+}
+
+.tool-button.secondary {
+    background-color: var(--subtle-bg);
+    color: var(--secondary-color);
+    border: 1px solid var(--border-color);
+}
+.tool-button.secondary:hover {
+    background-color: #f1f5f9;
+}
+
 
 /* --- FIXED BOTTOM MENU (NAVIGATION) --- */
 .fixed-bottom-menu {
@@ -199,6 +317,15 @@ h1 {
 .menu-button.secondary:hover:not(:disabled) {
     background-color: #f1f5f9;
     box-shadow: var(--shadow-sm);
+}
+
+.menu-button.tertiary {
+    background-color: #fb923c; /* Orange-400 for Draw button */
+    color: white;
+    border: none;
+}
+.menu-button.tertiary:hover:not(:disabled) {
+    background-color: #f97316; /* Orange-500 */
 }
 
 
@@ -328,8 +455,8 @@ h1 {
     visibility: hidden;
     position: fixed;
     right: 1.5rem;
-    /* Position above the fixed menu */
-    bottom: calc(1.5rem + var(--menu-height));
+    /* Position above the fixed menu and drawing tools */
+    bottom: calc(1.5rem + var(--menu-height) + var(--drawing-tool-height)); 
     background: var(--toast-bg);
     color: white;
     padding: 0.75rem 1rem;
@@ -388,4 +515,43 @@ h1 {
         right: 1rem;
         bottom: calc(1rem + var(--menu-height));
     }
+
+    #drawingTools {
+        /* Mobile: Make tools use more space */
+        gap: 0.4rem;
+        padding: 0.5rem;
+        bottom: var(--menu-height);
+        height: auto;
+    }
+    
+    #drawingTools.hidden {
+        /* Hide by sliding it down below the menu */
+        transform: translateY(100%);
+    }
+
+    .tool-label {
+        display: none; /* Hide labels on small screens */
+    }
+
+    .tool-input {
+        width: 30px;
+        height: 30px;
+    }
+
+    #colorPicker {
+        width: 30px;
+        height: 30px;
+        padding: 0;
+    }
+    
+    .size-slider {
+        /* Give slider more room on small screens */
+        flex-grow: 1;
+    }
+
+    .tool-button {
+        padding: 0.5rem 0.5rem;
+        font-size: 0.8rem;
+    }
+
 }
