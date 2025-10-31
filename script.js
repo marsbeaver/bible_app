@@ -291,6 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Function to populate the Verse Modal
     function populateVerseList(book, chapter) {
+        console.log('selecting verses for', book, chapter);
         if (!book || !chapter) return;
         verseList.innerHTML = '';
         currentChapterReference.textContent = `(${book} ${chapter})`;
@@ -411,7 +412,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Verse Selection Handler
     verseList.addEventListener('click', (e) => {
-        const button = e.closest('.verse-button');
+        const button = e.target.closest('.verse-button');
         if (!button) return;
 
         const verseData = button.dataset.verse;
