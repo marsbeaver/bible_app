@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bible Reader</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .controls {
+            margin-bottom: 20px;
+        }
+        select {
+            padding: 5px;
+            margin-right: 10px;
+            font-size: 16px;
+        }
+        .verse {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .verse:hover {
+            background-color: #f0f0f0;
+        }
+        .highlighted-verse {
+            background-color: #ffeb3b;
+        }
+        .highlighted-word {
+            background-color: #81d4fa;
+        }
+        #verseContainer {
+            margin-top: 20px;
+        }
+        .verse-reference {
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        /* New styles for word spans */
+        .word {
+            padding: 0 1px;
+            border-radius: 2px;
+            cursor: pointer;
+        }
+        .word:hover {
+            background-color: #4e91c0;
+        }
+        .highlighted-word:hover{
+            background-color: #4fc3f7;
+        }
+        .highlighted-verse:hover{
+            background-color: #fdd835;
+        }
+    </style>
+</head>
+<body>
+    <h1>Bible App (NIV)</h1>
+    <section class="instructions" aria-label="Instructions">
+        <h2>How to use</h2>
+        <p>Click any word to highlight it. Double-click a verse to highlight the whole verse.</p>
+        <p>Choose a book and chapter from the menus below to load verses.</p>
+    </section>
+    <div class="controls">
+        <select id="bookSelect">
+            <option value="">Select a Book</option>
+        </select>
+        <select id="chapterSelect">
+            <option value="">Select a Chapter</option>
+        </select>
+    </div>
+    <div id="verseContainer"></div>
+
+    <script src="niv.js"></script>
+    <script>
+        // Get unique books from bible_data
+        const getBooks = () => {
+            const books = new Set();
+            bible_data.forEach(verse => {
+                const bookName = verse.name.split(' ')[0];
+                books.add(bookName);
+            });
+            return Array.from(books);
+        };
+
+        // Get chapters for a specific book
+        const getChapters = (book) => {
+            const chapters = new Set();
+            bible_data.forEach(verse => {
+                const [bookName, reference] = verse.name.split(' ');
+                if (bookName === book) {
+                    const chapter = reference.split(':')[0];
+                    chapters.add(parseInt(chapter));
+                }
+            });
+            return Array.from(chapters).sort((a, b) => a - b);
+        };
+
+        // Get verses for a specific book and chapter
+        const getVerses = (book, chapter) => {
+            return bible_data.filter(verse => {
+                const [bookName, reference] = verse.name.split(' ');
+                const verseChapter = reference.split(':')[0];
+                return bookName === book && verseChapter === chapter;
+            });
+        };
+
+        // Initialize selects
+        const bookSelect = document.getElementById('bookSelect');
+        const chapterSelect = document.getElementById('chapterSelect');
+        const verseContainer = document.getElementById('verseContainer');
+
+        // Populate books
+        getBooks().forEach(book => {
+            const option = document.createElement('option');
+            option.value = book;
+            option.textContent = book;
+            bookSelect.appendChild(option);
+        });
+
+        // Book selection handler
+        bookSelect.addEventListener('change', (e) => {
+            const book = e.target.value;
+            chapterSelect.innerHTML = '<option value="">Select a Chapter</option>';
+            if (book) {
+                getChapters(book).forEach(chapter => {
+                    const option = document.createElement('option');
+                    option.value = chapter;
+                    option.textContent = chapter;
+                    chapterSelect.appendChild(option);
+                });
+            }
+            verseContainer.innerHTML = '';
+        });
+
+        // Chapter selection handler
+        chapterSelect.addEventListener('change', (e) => {
+            const book = bookSelect.value;
+            const chapter = e.target.value;
+            if (book && chapter) {
+                displayVerses(book, chapter);
+            }
+        });
+
+        // Display verses
+        function displayVerses(book, chapter) {
+            const verses = getVerses(book, chapter);
+            verseContainer.innerHTML = '';
+            
+            verses.forEach(verse => {
+                const verseDiv = document.createElement('div');
+                verseDiv.className = 'verse';
+                
+                // Create verse reference
+                const referenceSpan = document.createElement('span');
+                referenceSpan.className = 'verse-reference';
+                referenceSpan.textContent = verse.name;
+                verseDiv.appendChild(referenceSpan);
+
+                // Create verse text container
+                const textContainer = document.createElement('span');
+                textContainer.className = 'verse-text';
+                
+                // Split text into words and create clickable spans
+                const words = verse.verse.split(/(\s+)/);  // Split keeping separators
+                words.forEach(word => {
+                    if (word.trim()) {  // If it's an actual word
+                        const wordSpan = document.createElement('span');
+                        wordSpan.textContent = word;
+                        wordSpan.className = 'word';
+                        wordSpan.addEventListener('click', (e) => {
+                            e.stopPropagation();  // Prevent verse highlight
+                            wordSpan.classList.toggle('highlighted-word');
+                        });
+                        textContainer.appendChild(wordSpan);
+                    } else {
+                        // Preserve whitespace
+                        textContainer.appendChild(document.createTextNode(word));
+                    }
+                });
+
+                verseDiv.appendChild(textContainer);
+
+                // Double click to highlight verse
+                verseDiv.addEventListener('dblclick', () => {
+                    verseDiv.classList.toggle('highlighted-verse');
+                });
+
+                verseContainer.appendChild(verseDiv);
+            });
+        }
+    </script>
+</body>
+</html>
