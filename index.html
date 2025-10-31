@@ -17,9 +17,12 @@
         <p>Choose a book and chapter from the menus below to load verses.</p>
     </section>
     <div class="controls">
-        <select id="bookSelect">
-            <option value="">Select a Book</option>
-        </select>
+            <!-- Text input with custom autocomplete dropdown for book selection -->
+            <div class="autocomplete" style="position:relative; display:inline-block;">
+                <input id="bookInput" placeholder="Type or select a Book" aria-label="Book" autocomplete="off">
+                <div id="bookDropdown" class="autocomplete-dropdown" role="listbox" aria-label="Book suggestions" hidden></div>
+            </div>
+            <span id="bookError" class="book-error" aria-live="polite"></span>
         <select id="chapterSelect">
             <option value="">Select a Chapter</option>
         </select>
@@ -32,7 +35,10 @@
         const getBooks = () => {
             const books = new Set();
             bible_data.forEach(verse => {
-                const bookName = verse.name.split(' ')[0];
+                // Book name may be multi-word (e.g. "1 Chronicles"). The last token is the reference (e.g. "1:1").
+                const parts = verse.name.split(' ');
+                const reference = parts[parts.length - 1];
+                const bookName = parts.slice(0, parts.length - 1).join(' ');
                 books.add(bookName);
             });
             return Array.from(books);
@@ -41,7 +47,9 @@
         const getChapters = (book) => {
             const chapters = new Set();
             bible_data.forEach(verse => {
-                const [bookName, reference] = verse.name.split(' ');
+                const parts = verse.name.split(' ');
+                const reference = parts[parts.length - 1];
+                const bookName = parts.slice(0, parts.length - 1).join(' ');
                 if (bookName === book) {
                     const chapter = reference.split(':')[0];
                     chapters.add(parseInt(chapter));
@@ -52,43 +60,167 @@
 
         const getVerses = (book, chapter) => {
             return bible_data.filter(verse => {
-                const [bookName, reference] = verse.name.split(' ');
+                const parts = verse.name.split(' ');
+                const reference = parts[parts.length - 1];
+                const bookName = parts.slice(0, parts.length - 1).join(' ');
                 const verseChapter = reference.split(':')[0];
-                return bookName === book && verseChapter === chapter;
+                // chapter argument may be string; compare as strings
+                return bookName === book && String(verseChapter) === String(chapter);
             });
         };
 
-        const bookSelect = document.getElementById('bookSelect');
+        const bookInput = document.getElementById('bookInput');
+        const bookDropdown = document.getElementById('bookDropdown');
+        const bookError = document.getElementById('bookError');
         const chapterSelect = document.getElementById('chapterSelect');
         const verseContainer = document.getElementById('verseContainer');
 
-        getBooks().forEach(book => {
-            const option = document.createElement('option');
-            option.value = book;
-            option.textContent = book;
-            bookSelect.appendChild(option);
-        });
+        // Helper: escape HTML for safe insertion
+        function escapeHtml(s) {
+            return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
 
-        bookSelect.addEventListener('change', (e) => {
-            const book = e.target.value;
-            chapterSelect.innerHTML = '<option value="">Select a Chapter</option>';
-            if (book) {
-                getChapters(book).forEach(chapter => {
-                    const option = document.createElement('option');
-                    option.value = chapter;
-                    option.textContent = chapter;
-                    chapterSelect.appendChild(option);
+        // Load and sort books
+        const books = getBooks().sort((a, b) => a.localeCompare(b));
+
+        // Populate dropdown rendering
+        let currentMatches = [];
+        let dropdownIndex = -1;
+
+        function renderDropdown(matches, query) {
+            bookDropdown.innerHTML = '';
+            if (!matches.length) {
+                bookDropdown.hidden = true;
+                return;
+            }
+            matches.forEach((b, i) => {
+                const item = document.createElement('div');
+                item.className = 'autocomplete-item';
+                item.setAttribute('role', 'option');
+                item.dataset.index = i;
+                // highlight matched substring
+                const idx = b.toLowerCase().indexOf(query.toLowerCase());
+                if (idx >= 0) {
+                    const before = escapeHtml(b.slice(0, idx));
+                    const match = escapeHtml(b.slice(idx, idx + query.length));
+                    const after = escapeHtml(b.slice(idx + query.length));
+                    item.innerHTML = `${before}<span class="match">${match}</span>${after}`;
+                } else {
+                    item.textContent = b;
+                }
+                item.addEventListener('mousedown', (ev) => {
+                    // mousedown so selection occurs before blur
+                    ev.preventDefault();
+                    selectBook(b);
                 });
+                bookDropdown.appendChild(item);
+            });
+            currentMatches = matches;
+            dropdownIndex = -1;
+            bookDropdown.hidden = false;
+        }
+
+        function updateSelection() {
+            const items = Array.from(bookDropdown.children);
+            items.forEach((it, i) => it.classList.toggle('selected', i === dropdownIndex));
+            if (dropdownIndex >= 0 && items[dropdownIndex]) {
+                items[dropdownIndex].scrollIntoView({ block: 'nearest' });
+            }
+        }
+
+        function selectBook(name) {
+            bookInput.value = name;
+            bookDropdown.hidden = true;
+            bookError.textContent = '';
+            populateChaptersFor(name);
+            chapterSelect.focus();
+        }
+
+        function populateChaptersFor(book) {
+            chapterSelect.innerHTML = '<option value="">Select a Chapter</option>';
+            if (!book) return;
+            const chapters = getChapters(book);
+            chapters.forEach(ch => {
+                const opt = document.createElement('option');
+                opt.value = ch;
+                opt.textContent = ch;
+                chapterSelect.appendChild(opt);
+            });
+        }
+
+        // Input handling: show matches and auto-populate chapters using first partial match
+        bookInput.addEventListener('input', (e) => {
+            const q = e.target.value.trim();
+            if (!q) {
+                bookDropdown.hidden = true;
+                bookError.textContent = '';
+                chapterSelect.innerHTML = '<option value="">Select a Chapter</option>';
+                verseContainer.innerHTML = '';
+                return;
+            }
+            const matches = books.filter(b => b.toLowerCase().includes(q.toLowerCase()));
+            renderDropdown(matches.slice(0, 12), q);
+            // Auto-populate chapters for first partial match
+            if (matches.length) {
+                populateChaptersFor(matches[0]);
+            } else {
+                chapterSelect.innerHTML = '<option value="">Select a Chapter</option>';
             }
             verseContainer.innerHTML = '';
         });
 
-        chapterSelect.addEventListener('change', (e) => {
-            const book = bookSelect.value;
-            const chapter = e.target.value;
-            if (book && chapter) {
-                displayVerses(book, chapter);
+        // Keyboard navigation for dropdown
+        bookInput.addEventListener('keydown', (e) => {
+            if (bookDropdown.hidden) return;
+            const items = Array.from(bookDropdown.children);
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                dropdownIndex = Math.min(dropdownIndex + 1, items.length - 1);
+                updateSelection();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                dropdownIndex = Math.max(dropdownIndex - 1, 0);
+                updateSelection();
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (dropdownIndex >= 0) selectBook(currentMatches[dropdownIndex]);
+                else {
+                    // if no selection, accept exact match or show error
+                    const exact = books.find(b => b.toLowerCase() === bookInput.value.trim().toLowerCase());
+                    if (exact) selectBook(exact);
+                    else {
+                        bookError.textContent = 'Unknown book';
+                        showToast('Unknown book');
+                        bookDropdown.hidden = true;
+                    }
+                }
+            } else if (e.key === 'Escape') {
+                bookDropdown.hidden = true;
             }
+        });
+
+        // hide dropdown on blur (allow clicks to register)
+        bookInput.addEventListener('blur', () => setTimeout(() => bookDropdown.hidden = true, 150));
+
+        // validation on blur: show message if book unknown
+        bookInput.addEventListener('focusout', () => {
+            const val = bookInput.value.trim();
+            if (!val) { bookError.textContent = ''; return; }
+            const exact = books.find(b => b.toLowerCase() === val.toLowerCase());
+            bookError.textContent = exact ? '' : 'Unknown book';
+        });
+
+        chapterSelect.addEventListener('change', (e) => {
+            const bookVal = bookInput.value.trim();
+            const chapter = e.target.value;
+            const matched = books.find(b => b.toLowerCase() === bookVal.toLowerCase());
+            if (!matched) {
+                bookError.textContent = 'Please select a valid book before choosing a chapter';
+                showToast('Please select a valid book');
+                return;
+            }
+            bookError.textContent = '';
+            if (matched && chapter) displayVerses(matched, chapter);
         });
 
         const clearBtn = document.getElementById('clearHighlights');

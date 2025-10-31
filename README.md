@@ -1,5 +1,7 @@
 # Bible App
 
+Enter a book from the Bible and select a chapter from it, the verses for that chapter will be displayed.
+
 Supports highlighting at both the word and verse levels.
 
 - Single-click a word to toggle its highlight.
